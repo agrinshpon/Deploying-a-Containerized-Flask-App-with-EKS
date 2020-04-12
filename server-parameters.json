@@ -1,0 +1,30 @@
+[
+	{
+		"ParameterKey": "EnvironmentName",
+		"ParameterValue": "Udagram"
+	},
+	{
+		"ParameterKey": "MinServer",
+		"ParameterValue": "2"
+	},
+	{
+		"ParameterKey": "MaxServer",
+		"ParameterValue": "4"
+	},
+	{
+		"ParameterKey": "DesiredServer",
+		"ParameterValue": "4"
+	},
+	{
+		"ParameterKey": "LBInstanceType",
+		"ParameterValue": "t3.medium"
+	},
+	{
+		"ParameterKey": "LBVolumeSize",
+		"ParameterValue": "10"
+	},
+	{
+		"ParameterKey": "BastionKeyPair",
+		"ParameterValue": "bastion-key-pair"
+	}
+]
