@@ -28,4 +28,4 @@ Once you have completed your Continuous Integration you will set up Continuous D
 ![Architecture Diagram](architecture.png)
 
 ### Proof of Deployment
-![Deployment](final output.png)
+![Deployment](output.png)
