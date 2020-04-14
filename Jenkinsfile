@@ -19,7 +19,7 @@ pipeline {
          stage('Create Network Stack and EKS Control Plane')  {
            steps {
              withAWS(credentials: 'udacity-capstone-aws', region: 'us-east-1') {
-              def outputs = cfnUpdate(stack:'networkstack', file:'network.yml', paramsFile:'network-parameters.yml')
+               cfnUpdate(stack:'networkstack', file:'network.yml', paramsFile:'network-parameters.yml')
             }
           }
         }
