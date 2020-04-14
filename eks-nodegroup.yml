@@ -1,47 +1,11 @@
-AWSTemplateFormatVersion: "2010-09-09"
-
-Description: Amazon EKS - Node Group
-
-Metadata:
-  "AWS::CloudFormation::Interface":
-    ParameterGroups:
-      - Label:
-          default: EKS Cluster
-        Parameters:
-          - ClusterName
-          - ClusterControlPlaneSecurityGroup
-      - Label:
-          default: Worker Node Configuration
-        Parameters:
-          - NodeGroupName
-          - NodeAutoScalingGroupMinSize
-          - NodeAutoScalingGroupDesiredCapacity
-          - NodeAutoScalingGroupMaxSize
-          - NodeInstanceType
-          - NodeImageIdSSMParam
-          - NodeImageId
-          - NodeVolumeSize
-          - KeyName
-          - BootstrapArguments
-      - Label:
-          default: Worker Network Configuration
-        Parameters:
-          - VpcId
-          - Subnets
+Description: >
+    EkS Node Group
 
 Parameters:
-  BootstrapArguments:
-    Type: String
-    Default: ""
-    Description: "Arguments to pass to the bootstrap script. See files/bootstrap.sh in https://github.com/awslabs/amazon-eks-ami"
 
-  ClusterControlPlaneSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup::Id"
-    Description: The security group of the cluster control plane.
-
-  ClusterName:
+  EnvironmentName:
     Type: String
-    Description: The cluster name provided when the cluster was created. If it is incorrect, nodes will not be able to join the cluster.
+    Description: Environment Name
 
   KeyName:
     Type: "AWS::EC2::KeyPair::KeyName"
@@ -310,14 +274,6 @@ Parameters:
     Default: 20
     Description: Node volume size
 
-  Subnets:
-    Type: "List<AWS::EC2::Subnet::Id>"
-    Description: The subnets where workers can be created.
-
-  VpcId:
-    Type: "AWS::EC2::VPC::Id"
-    Description: The VPC of the worker instances
-
 Conditions:
   HasNodeImageId: !Not
     - "Fn::Equals":
@@ -355,9 +311,20 @@ Resources:
     Properties:
       GroupDescription: Security group for all nodes in the cluster
       Tags:
-        - Key: !Sub kubernetes.io/cluster/${ClusterName}
+        - Key:
+              !Sub
+                  - kubernetes.io/cluster/${EKSCPId}
+                  - EKSCPId:
+                      Fn::ImportValue:
+                        !Sub "${EnvironmentName}-EKS-CP-ID"
           Value: owned
-      VpcId: !Ref VpcId
+      VpcId:
+        Fn::ImportValue: !Sub "${EnvironmentName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
 
   NodeSecurityGroupIngress:
     Type: "AWS::EC2::SecurityGroupIngress"
@@ -370,13 +337,15 @@ Resources:
       SourceSecurityGroupId: !Ref NodeSecurityGroup
       ToPort: 65535
 
-  ClusterControlPlaneSecurityGroupIngress:
+  EKSSecGroupIngress:
     Type: "AWS::EC2::SecurityGroupIngress"
     DependsOn: NodeSecurityGroup
     Properties:
       Description: Allow pods to communicate with the cluster API Server
       FromPort: 443
-      GroupId: !Ref ClusterControlPlaneSecurityGroup
+      GroupId:
+        Fn::ImportValue:
+          !Sub "${EnvironmentName}-EKS-CP-SEC"
       IpProtocol: tcp
       SourceSecurityGroupId: !Ref NodeSecurityGroup
       ToPort: 443
@@ -388,7 +357,9 @@ Resources:
       Description: Allow the cluster control plane to communicate with worker Kubelet and pods
       DestinationSecurityGroupId: !Ref NodeSecurityGroup
       FromPort: 1025
-      GroupId: !Ref ClusterControlPlaneSecurityGroup
+      GroupId:
+        Fn::ImportValue:
+          !Sub "${EnvironmentName}-EKS-CP-SEC"
       IpProtocol: tcp
       ToPort: 65535
 
@@ -399,7 +370,9 @@ Resources:
       Description: Allow the cluster control plane to communicate with pods running extension API servers on port 443
       DestinationSecurityGroupId: !Ref NodeSecurityGroup
       FromPort: 443
-      GroupId: !Ref ClusterControlPlaneSecurityGroup
+      GroupId:
+        Fn::ImportValue:
+          !Sub "${EnvironmentName}-EKS-CP-SEC"
       IpProtocol: tcp
       ToPort: 443
 
@@ -411,7 +384,9 @@ Resources:
       FromPort: 1025
       GroupId: !Ref NodeSecurityGroup
       IpProtocol: tcp
-      SourceSecurityGroupId: !Ref ClusterControlPlaneSecurityGroup
+      SourceSecurityGroupId:
+        Fn::ImportValue:
+          !Sub "${EnvironmentName}-EKS-CP-SEC"
       ToPort: 65535
 
   NodeSecurityGroupFromControlPlaneOn443Ingress:
@@ -422,7 +397,9 @@ Resources:
       FromPort: 443
       GroupId: !Ref NodeSecurityGroup
       IpProtocol: tcp
-      SourceSecurityGroupId: !Ref ClusterControlPlaneSecurityGroup
+      SourceSecurityGroupId:
+        Fn::ImportValue:
+          !Sub "${EnvironmentName}-EKS-CP-SEC"
       ToPort: 443
 
   NodeLaunchConfig:
@@ -444,16 +421,20 @@ Resources:
       KeyName: !Ref KeyName
       SecurityGroups:
         - Ref: NodeSecurityGroup
-      UserData: !Base64
-        "Fn::Sub": |
-          #!/bin/bash
-          set -o xtrace
-          /etc/eks/bootstrap.sh ${ClusterName} ${BootstrapArguments}
-          /opt/aws/bin/cfn-signal --exit-code $? \
-                   --stack  ${AWS::StackName} \
-                   --resource NodeGroup  \
-                   --region ${AWS::Region}
-
+      UserData:
+        Fn::Base64:
+          !Sub
+            - |
+                #!/bin/bash
+                set -o xtrace
+                /etc/eks/bootstrap.sh ${EKSCPId}
+                /opt/aws/bin/cfn-signal --exit-code $? \
+                         --stack  ${AWS::StackName} \
+                         --resource NodesAutoScalingGroup  \
+                         --region ${AWS::Region}
+            - EKSCPId:
+                Fn::ImportValue:
+                    !Sub "${EnvironmentName}-EKS-CP-ID"
   NodeGroup:
     Type: "AWS::AutoScaling::AutoScalingGroup"
     Properties:
@@ -464,11 +445,25 @@ Resources:
       Tags:
         - Key: Name
           PropagateAtLaunch: "true"
-          Value: !Sub ${ClusterName}-${NodeGroupName}-Node
-        - Key: !Sub kubernetes.io/cluster/${ClusterName}
+          Value:
+            !Sub
+                - ${EKSCPId}-${NodeGroupName}-Node
+                - EKSCPId:
+                    Fn::ImportValue:
+                      !Sub "${EnvironmentName}-EKS-CP-ID"
+        - Key:
+            !Sub
+                - "kubernetes.io/cluster/${EKSCPId}"
+                - EKSCPId:
+                    Fn::ImportValue:
+                        !Sub "${EnvironmentName}-EKS-CP-ID"
           PropagateAtLaunch: "true"
           Value: owned
-      VPCZoneIdentifier: !Ref Subnets
+      VPCZoneIdentifier:
+        Fn::Split:
+            - ","
+            - Fn::ImportValue:
+                Fn::Sub: ${EnvironmentName}-ALL-SN
     UpdatePolicy:
       AutoScalingRollingUpdate:
         MaxBatchSize: "1"

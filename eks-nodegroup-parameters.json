@@ -1,0 +1,15 @@
+[
+	{
+		"ParameterKey": "KeyName",
+		"ParameterValue": "eks-node-group"
+	},
+
+  {
+		"ParameterKey": "NodeGroupName",
+		"ParameterValue": "NodeGroup"
+	},
+  {
+    "ParameterKey": "EnvironmentName",
+    "ParameterValue": "Capstone"
+  }
+]
