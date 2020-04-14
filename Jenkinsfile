@@ -16,5 +16,24 @@ pipeline {
                         }
                   }
         }
+         stage('Create Network Stack and EKS Control Plane')  {
+           steps {
+             withAWS(credentials: 'udacity-capstone-aws', region: 'us-east-1') {
+              def outputs = cfnUpdate(stack:'networkstack', file:'network.yml', paramsFile:'network-parameters.yml')
+            }
+          }
+        }
+         stage('EKS Deployment') {
+           steps {
+             withAWS(credentials: 'udacity-capstone-aws', region: 'us-east-1') {
+               sh 'aws eks --region us-east-1 update-kubeconfig --name EKSCPCluster-MDIEtZxe9Utx'
+               sh 'kubectl apply -f aws-auth-cm.yml'
+               sh 'kubectl set image deployments/udacity-capstone udacity-capstone=agrinshpon/udacity-capstone:latest'
+               sh 'kubectl apply -f udacity-capstone-deployment.yml'
+               sh 'kubectl apply -f udacity-capstone-service.yml'
+               sh 'kubectl get svc udacity-capstone -o yaml'
+          }
+          }
+        }
 }
 }
