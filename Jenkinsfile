@@ -32,6 +32,7 @@ pipeline {
        }
          stage('EKS Deployment') {
            steps {
+            dir ('./') {
              withAWS(credentials: 'udacity-capstone-aws', region: 'us-east-1') {
                sh 'aws eks --region us-east-1 update-kubeconfig --name EKSCPCluster-MDIEtZxe9Utx'
                sh 'kubectl apply -f aws-auth-cm.yml'
@@ -39,6 +40,7 @@ pipeline {
                sh 'kubectl apply -f udacity-capstone-deployment.yml'
                sh 'kubectl apply -f udacity-capstone-service.yml'
                sh 'kubectl get svc udacity-capstone -o yaml'
+          }
           }
           }
         }
